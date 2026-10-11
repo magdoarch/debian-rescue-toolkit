@@ -249,6 +249,9 @@ cat <<'EOF' > "${IMAGE_DIR}/boot/grub/grub.cfg"
 set default="0"
 set timeout=5
 
+# Ensure root filesystem is found regardless of boot device (CD/USB/Ventoy)
+search --no-floppy --set=root --file /live/vmlinuz
+
 insmod font
 if loadfont /boot/grub/fonts/unicode.pf2 ; then
     insmod gfxterm
@@ -257,16 +260,19 @@ if loadfont /boot/grub/fonts/unicode.pf2 ; then
 fi
 
 menuentry "Debian Live (RAM Boot - Toram)" {
+    search --no-floppy --set=root --file /live/vmlinuz
     linux /live/vmlinuz boot=live toram components quiet splash
     initrd /live/initrd.img
 }
 
 menuentry "Debian Live (Standard)" {
+    search --no-floppy --set=root --file /live/vmlinuz
     linux /live/vmlinuz boot=live components quiet splash
     initrd /live/initrd.img
 }
 
 menuentry "Memory Test (Memtest86+ v8.10)" {
+    search --no-floppy --set=root --file /boot/memtest86+.bin
     linux /boot/memtest86+.bin
 }
 
@@ -298,8 +304,8 @@ mcopy -i "${IMAGE_DIR}/boot/grub/efiboot.img" "${IMAGE_DIR}/EFI/BOOT/BOOTX64.EFI
 grub-mkstandalone \
     --format=i386-pc \
     --output="${IMAGE_DIR}/boot/grub/core.img" \
-    --install-modules="linux normal iso9660 biosdisk memdisk search tar" \
-    --modules="linux normal iso9660 biosdisk search" \
+    --install-modules="linux normal iso9660 biosdisk memdisk search search_fs_file tar" \
+    --modules="linux normal iso9660 biosdisk search search_fs_file" \
     --locales="" \
     --fonts="" \
     "boot/grub/grub.cfg=${IMAGE_DIR}/boot/grub/grub.cfg"
