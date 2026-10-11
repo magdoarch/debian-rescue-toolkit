@@ -245,12 +245,25 @@ cp "${ASSETS_DIR}/mt86p_810_x86_64" "${IMAGE_DIR}/boot/memtest86+.bin"
 echo "=== [5/6] Setting up GRUB Bootloader (BIOS + UEFI) ==="
 mkdir -p "${IMAGE_DIR}/boot/grub"
 
+# Early configuration to find real boot medium and set prefix
+cat <<'EOF' > "${IMAGE_DIR}/boot/grub/early-grub.cfg"
+search --no-floppy --set=root --file /live/vmlinuz
+set prefix=($root)/boot/grub
+configfile $prefix/grub.cfg
+EOF
+
 cat <<'EOF' > "${IMAGE_DIR}/boot/grub/grub.cfg"
+# Locate the root filesystem device
+search --no-floppy --set=root --file /live/vmlinuz
+set prefix=($root)/boot/grub
+
+# Preload modules
+insmod linux
+insmod reboot
+insmod halt
+
 set default="0"
 set timeout=5
-
-# Ensure root filesystem is found regardless of boot device (CD/USB/Ventoy)
-search --no-floppy --set=root --file /live/vmlinuz
 
 insmod font
 if loadfont /boot/grub/fonts/unicode.pf2 ; then
@@ -277,10 +290,12 @@ menuentry "Memory Test (Memtest86+ v8.10)" {
 }
 
 menuentry "Reboot" {
+    insmod reboot
     reboot
 }
 
 menuentry "Poweroff" {
+    insmod halt
     halt
 }
 EOF
@@ -305,11 +320,11 @@ mkdir -p "${IMAGE_DIR}/EFI/BOOT"
 grub-mkstandalone \
     --format=x86_64-efi \
     --output="${IMAGE_DIR}/EFI/BOOT/BOOTX64.EFI" \
-    --install-modules="linux normal iso9660 search search_fs_file efi_gop efi_uga reboot halt" \
-    --modules="linux normal iso9660 search search_fs_file reboot halt" \
+    --install-modules="linux normal iso9660 search search_fs_file efi_gop efi_uga reboot halt font gfxterm test" \
+    --modules="linux normal iso9660 search search_fs_file reboot halt font gfxterm" \
     --locales="" \
     --fonts="" \
-    "boot/grub/grub.cfg=${IMAGE_DIR}/boot/grub/grub.cfg"
+    "boot/grub/grub.cfg=${IMAGE_DIR}/boot/grub/early-grub.cfg"
 
 # Create EFI FAT image for hybrid ISO
 dd if=/dev/zero of="${IMAGE_DIR}/boot/grub/efiboot.img" bs=1M count=8
@@ -317,15 +332,13 @@ mkfs.vfat "${IMAGE_DIR}/boot/grub/efiboot.img"
 mmd -i "${IMAGE_DIR}/boot/grub/efiboot.img" ::/EFI ::/EFI/BOOT
 mcopy -i "${IMAGE_DIR}/boot/grub/efiboot.img" "${IMAGE_DIR}/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/
 
-# Build BIOS image
-grub-mkstandalone \
+# Build BIOS image with grub-mkimage embedded with early search config
+grub-mkimage \
     --format=i386-pc \
     --output="${IMAGE_DIR}/boot/grub/core.img" \
-    --install-modules="linux normal iso9660 biosdisk memdisk search search_fs_file tar reboot halt acpi" \
-    --modules="linux normal iso9660 biosdisk search search_fs_file reboot halt" \
-    --locales="" \
-    --fonts="" \
-    "boot/grub/grub.cfg=${IMAGE_DIR}/boot/grub/grub.cfg"
+    --config="${IMAGE_DIR}/boot/grub/early-grub.cfg" \
+    --prefix="/boot/grub" \
+    iso9660 biosdisk search search_fs_file normal linux reboot halt test
 
 cat /usr/lib/grub/i386-pc/cdboot.img "${IMAGE_DIR}/boot/grub/core.img" > "${IMAGE_DIR}/boot/grub/bios.img"
 
