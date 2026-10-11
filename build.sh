@@ -285,11 +285,28 @@ menuentry "Poweroff" {
 }
 EOF
 
+# Copy GRUB runtime modules so dynamic commands (reboot, halt, etc.) work without error
+mkdir -p "${IMAGE_DIR}/boot/grub/i386-pc"
+cp -r /usr/lib/grub/i386-pc/*.mod "${IMAGE_DIR}/boot/grub/i386-pc/"
+cp -r /usr/lib/grub/i386-pc/*.lst "${IMAGE_DIR}/boot/grub/i386-pc/"
+
+mkdir -p "${IMAGE_DIR}/boot/grub/x86_64-efi"
+cp -r /usr/lib/grub/x86_64-efi/*.mod "${IMAGE_DIR}/boot/grub/x86_64-efi/"
+cp -r /usr/lib/grub/x86_64-efi/*.lst "${IMAGE_DIR}/boot/grub/x86_64-efi/"
+
+# Copy unicode font if available
+mkdir -p "${IMAGE_DIR}/boot/grub/fonts"
+if [ -f /usr/share/grub/unicode.pf2 ]; then
+    cp /usr/share/grub/unicode.pf2 "${IMAGE_DIR}/boot/grub/fonts/"
+fi
+
 # Build EFI image
 mkdir -p "${IMAGE_DIR}/EFI/BOOT"
 grub-mkstandalone \
     --format=x86_64-efi \
     --output="${IMAGE_DIR}/EFI/BOOT/BOOTX64.EFI" \
+    --install-modules="linux normal iso9660 search search_fs_file efi_gop efi_uga reboot halt" \
+    --modules="linux normal iso9660 search search_fs_file reboot halt" \
     --locales="" \
     --fonts="" \
     "boot/grub/grub.cfg=${IMAGE_DIR}/boot/grub/grub.cfg"
@@ -304,8 +321,8 @@ mcopy -i "${IMAGE_DIR}/boot/grub/efiboot.img" "${IMAGE_DIR}/EFI/BOOT/BOOTX64.EFI
 grub-mkstandalone \
     --format=i386-pc \
     --output="${IMAGE_DIR}/boot/grub/core.img" \
-    --install-modules="linux normal iso9660 biosdisk memdisk search search_fs_file tar" \
-    --modules="linux normal iso9660 biosdisk search search_fs_file" \
+    --install-modules="linux normal iso9660 biosdisk memdisk search search_fs_file tar reboot halt acpi" \
+    --modules="linux normal iso9660 biosdisk search search_fs_file reboot halt" \
     --locales="" \
     --fonts="" \
     "boot/grub/grub.cfg=${IMAGE_DIR}/boot/grub/grub.cfg"
